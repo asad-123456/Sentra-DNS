@@ -158,11 +158,14 @@
 * **Rationale:** Enforces complete boundary test coverage ($L=1$ to $L=255$), verifies Network Byte Order (`!`), guarantees 100% roundtrip byte preservation, and ensures zero desynchronization before Member 1, 2, and 3 build their dependent modules.
 
 ### ADR-012: Implementation & Verification of Protocol Engine (`src/protocol.py`)
-* **Date:** 2026-10-21
+* **Date:** 2026-10-21 (Updated: 2026-10-24)
 * **Status:** Implemented & Verified
 * **Context:** Following ADR-009 and ADR-011, the core wire contract module `src/protocol.py` and unit test suite `tests/test_protocol.py` needed to be built and verified against all specified boundaries and byte alignments.
-* **Decision:** Implemented `MYDNSMessage` with 64-bit Big-Endian header (`!HBBBxH`), domain bounds enforcement ($1 \le L \le 255$), ASCII character validation, conditional 4-byte IPv4 trailer formatting, multi-tier deserialization guards, and diagnostic hex dumps. Verified with a 17-case automated test suite (100% pass rate in 0.001s).
-* **SHA-256 Checksum:** `81AA0F3281281404D226F00A69779C21AA9BAC72F4B0F9D4611291B14692E263`.
+* **Decision:** Implemented `MYDNSMessage` with 64-bit Big-Endian header (`!HBBBxH`), domain bounds enforcement ($1 \le L \le 255$), ASCII character validation, conditional 4-byte IPv4 trailer formatting, multi-tier deserialization guards, diagnostic hex dumps, and standalone interactive CLI self-check (`__main__`). Verified with a 17-case automated test suite (100% pass rate in 0.001s).
+* **SHA-256 Checksums:**
+  * **Canonical Repo / LF:** `351BAF0F33C662E9A50E64AC64F7B02EA7151F36D55F2A129256CF5DABA0521B`
+  * **Windows Checkout (CRLF):** `22EA136B541C022E6A0C62296B19371BEFF34705173D2AF7A4B2487690016797`
+  * *(Historical note: Initial commit `fe23e16` before the `__main__` block had hash `C9E1188FA63F5261665EDE7CBA23FF8B17BA7F25E1CBF3D5398D34E6D52968B9` (LF) / `BD676BC2C31AF15147FF34B6110A252464DCE83CBF11749CF40AD1A972E20FD1` (CRLF); `81AA0F...` was the pre-commit buffer without an EOF newline).*
 * **Impact:** Unblocks Member 1 (Client), Member 2 (Resolver), and Member 3 (Authoritative Server) for parallel independent development.
 
 ---

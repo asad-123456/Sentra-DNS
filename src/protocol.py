@@ -334,3 +334,61 @@ class MYDNSMessage:
             and self.ip_address == other.ip_address
         )
 
+
+if __name__ == "__main__":
+    print("=" * 70)
+    print("MYDNS/1.0 Protocol Demonstration & Self-Check")
+    print("Course: CS-327 Computer Communication Networks (Fall 2026)")
+    print("=" * 70)
+
+    # 1. Build & Pack a Query
+    print("\n1. Constructing Sample Query for 'portal.neduet.local':")
+    sample_query = MYDNSMessage(
+        tx_id=0xA1B2,
+        msg_type=MSG_QUERY,
+        query_type=TYPE_A,
+        domain="portal.neduet.local"
+    )
+    query_raw = sample_query.pack()
+    print(f"   Object:       {sample_query}")
+    print(f"   Wire Length:  {len(query_raw)} bytes (Formula: 8 header + 1 len + 19 domain = 28B)")
+    print(f"   Hex Dump:     {sample_query.hex_dump()}")
+    print("   Wireshark Inspection Format:")
+    for line in MYDNSMessage.format_hex(query_raw).splitlines():
+        print(f"     {line}")
+
+    # 2. Unpack Query
+    unpacked_q = MYDNSMessage.unpack(query_raw)
+    assert unpacked_q == sample_query, "Query round-trip assertion failed!"
+    print("   [+] Query unpacked successfully with 100% round-trip fidelity.")
+
+    # 3. Build & Pack a Response
+    print("\n2. Constructing Sample Response (ip='10.0.1.5', ttl=120s):")
+    sample_response = MYDNSMessage(
+        tx_id=sample_query.tx_id,
+        msg_type=MSG_RESPONSE,
+        query_type=TYPE_A,
+        status=STATUS_SUCCESS,
+        ttl=120,
+        domain=sample_query.domain,
+        ip_address="10.0.1.5"
+    )
+    resp_raw = sample_response.pack()
+    print(f"   Object:       {sample_response}")
+    print(f"   Wire Length:  {len(resp_raw)} bytes (Formula: 8 header + 1 len + 19 domain + 4 IPv4 = 32B)")
+    print(f"   Hex Dump:     {sample_response.hex_dump()}")
+    print("   Wireshark Inspection Format:")
+    for line in MYDNSMessage.format_hex(resp_raw).splitlines():
+        print(f"     {line}")
+
+    # 4. Unpack Response
+    unpacked_r = MYDNSMessage.unpack(resp_raw)
+    assert unpacked_r == sample_response, "Response round-trip assertion failed!"
+    print("   [+] Response unpacked successfully with 100% round-trip fidelity.")
+
+    print("\n" + "=" * 70)
+    print("[SUCCESS] MYDNS/1.0 protocol engine is 100% ready and verified!")
+    print("Run automated test suite: python -m unittest discover -s tests -p 'test_*.py' -v")
+    print("=" * 70)
+
+
