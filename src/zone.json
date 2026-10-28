@@ -1,0 +1,15 @@
+{
+  "portal.neduet.local": {"ip": "10.0.1.5", "ttl": 120},
+  "bench01.neduet.local": {"ip": "10.0.2.1", "ttl": 120},
+  "bench02.neduet.local": {"ip": "10.0.2.2", "ttl": 120},
+  "bench03.neduet.local": {"ip": "10.0.2.3", "ttl": 120},
+  "bench04.neduet.local": {"ip": "10.0.2.4", "ttl": 120},
+  "bench05.neduet.local": {"ip": "10.0.2.5", "ttl": 120},
+  "bench06.neduet.local": {"ip": "10.0.2.6", "ttl": 120},
+  "bench07.neduet.local": {"ip": "10.0.2.7", "ttl": 120},
+  "bench08.neduet.local": {"ip": "10.0.2.8", "ttl": 120},
+  "bench09.neduet.local": {"ip": "10.0.2.9", "ttl": 120},
+  "bench10.neduet.local": {"ip": "10.0.2.10", "ttl": 120},
+  "short.neduet.local": {"ip": "10.0.3.1", "ttl": 10},
+  "long.neduet.local": {"ip": "10.0.3.2", "ttl": 3600}
+}
