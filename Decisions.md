@@ -21,6 +21,9 @@
 * [ADR-010: Standardized Fully Qualified Domain Names (`portal.neduet.local`)](#adr-010-standardized-fully-qualified-domain-names-portalneduetlocal)
 * [ADR-011: Protocol Implementation Strategy & Unit Test Verification Protocol](#adr-011-protocol-implementation-strategy--unit-test-verification-protocol)
 * [ADR-012: Implementation & Verification of Protocol Engine (`src/protocol.py`)](#adr-012-implementation--verification-of-protocol-engine-srcprotocolpy)
+* [ADR-013: Implementation of Host 1 Client Engine & Real Socket Benchmark Suite](#adr-013-implementation-of-host-1-client-engine--real-socket-benchmark-suite)
+* [ADR-014: Architectural Revisions, Client Exception Hardening & Benchmark Alignment Recommendations](#adr-014-architectural-revisions-client-exception-hardening--benchmark-alignment-recommendations)
+* [ADR-015: Client Defensive Hardening, Fast-Fail Terminal Error Handling & Application-Level Throughput Benchmarking](#adr-015-client-defensive-hardening-fast-fail-terminal-error-handling--application-level-throughput-benchmarking)
 
 ---
 
@@ -167,6 +170,34 @@
   * **Windows Checkout (CRLF):** `22EA136B541C022E6A0C62296B19371BEFF34705173D2AF7A4B2487690016797`
   * *(Historical note: Initial commit `fe23e16` before the `__main__` block had hash `C9E1188FA63F5261665EDE7CBA23FF8B17BA7F25E1CBF3D5398D34E6D52968B9` (LF) / `BD676BC2C31AF15147FF34B6110A252464DCE83CBF11749CF40AD1A972E20FD1` (CRLF); `81AA0F...` was the pre-commit buffer without an EOF newline).*
 * **Impact:** Unblocks Member 1 (Client), Member 2 (Resolver), and Member 3 (Authoritative Server) for parallel independent development.
+
+### ADR-013: Implementation of Host 1 Client Engine & Real Socket Benchmark Suite
+* **Date:** 2026-10-24
+* **Status:** Implemented & Verified
+* **Context:** Requirement R3 and Rubric Criteria 1 & 3 require building the Client node (Host 1) with microsecond RTT measurement, Stop-and-Wait timeout ARQ, and automated multi-trial statistical benchmarking.
+* **Decision:** Implemented `src/client.py` using native UDP sockets (`socket.SOCK_DGRAM`) with a 1.5s timeout and 3 max retries, measuring RTT via `time.perf_counter()`. Implemented `tests/benchmark_runner.py` computing Mean ($\mu$), Sample Standard Deviation ($\sigma$), Min/Max, and generating high-resolution Matplotlib comparison bar charts with error bars saved to `docs/rtt_benchmark_plot.png`. Built `tests/test_client.py` and `tests/test_benchmark.py` using 100% real UDP loopback sockets (Zero Mocks).
+* **Impact:** Completes Host 1 deliverables for Member 1 (Asadullah Zafar). 27/27 automated unit tests passing in < 1.0s.
+
+### ADR-014: Architectural Revisions, Client Exception Hardening & Benchmark Alignment Recommendations
+* **Date:** 2026-10-28
+* **Status:** Proposed & Documented (`gemini-docs/architectural_revisions-recommedations.md`)
+* **Context:** A full codebase audit of Asadullah's part identified three subtle operational nuances: (1) unprotected `MYDNSMessage.unpack(data)` in `client.py` vulnerable to stray/malformed UDP traffic on noisy Wi-Fi; (2) potential attempt timeout drift upon receiving asynchronous mismatched TxIDs; and (3) `benchmark_runner.py` Cache Miss subdomain queries (`miss{i}.{domain}`) returning `STATUS_NXDOMAIN` unless `src/zone.json` includes short-TTL benchmark records.
+* **Decision:** Formally documented and published complete hardening recommendations in `gemini-docs/architectural_revisions-recommedations.md`. Recommended wrapping `unpack(data)` in `try...except (ValueError, TypeError, struct.error): continue`, adding deadline accounting to Stop-and-Wait retries, and coordinating with Member 3 to seed `miss1` through `miss10` in `src/zone.json` with 1s TTL.
+* **Impact:** Hardens client and benchmark suite against edge-case network anomalies ahead of multi-host physical evaluation.
+
+---
+
+### ADR-015: Client Defensive Hardening, Fast-Fail Terminal Error Handling & Application-Level Throughput Benchmarking
+* **Date:** 2026-10-28
+* **Status:** Implemented & Verified
+* **Context:** In coordination with Abdur Rahman (ABR - Member 3), the team resolved cross-module contract details: (1) catching `ValueError`, `TypeError`, and `struct.error` on `unpack()` in `src/client.py`; (2) adding strict attempt deadline accounting to Stop-and-Wait retries; (3) defining terminal fail-fast behavior on `MSG_ERROR` / `STATUS_FORMAT_ERROR` with matching TxID without retrying; (4) adopting ABR's `bench01.neduet.local` to `bench10.neduet.local` records for Cache Miss benchmarks; and (5) satisfying Requirement R6 Metric 2 by adding Application-Level Throughput (Queries/sec and Payload KB/s) and dynamic wire byte arithmetic ($9+L$ query, $13+L$ response).
+* **Decision:**
+  1. Wrapped `MYDNSMessage.unpack(data)` in `try...except (ValueError, TypeError, struct.error): continue` inside `client.py`'s receive loop.
+  2. Implemented `attempt_deadline = t_start + timeout` and `sock.settimeout(time_left)` to prevent timeout drift from noise packets.
+  3. Structured `query_domain()` to treat `MSG_ERROR` / `STATUS_FORMAT_ERROR` as terminal with zero retries.
+  4. Updated `tests/benchmark_runner.py` with dynamic payload bytes, sustained QPS, and KB/s throughput metrics in the comparison table and a 3-panel Matplotlib chart.
+  5. Expanded `tests/test_client.py` and `tests/test_benchmark.py` to 29 tests (100% pass rate in 1.0s).
+* **Impact:** Fully satisfies CS-327 Requirement R6 (Metrics 1, 2, and 3) and guarantees zero client crashes from Wi-Fi background noise.
 
 ---
 

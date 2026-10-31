@@ -26,7 +26,9 @@ c:\projects\Sentra_DNS\
 │   ├── member1_asadullah_client_benchmarking.md
 │   ├── member2_atta_resolver_caching.md
 │   ├── member3_abdur_protocol_authoritative.md
-│   └── protocol_implementation_plan.md    # Step-by-step implementation & unit test plan
+│   ├── architectural_revisions-recommedations.md # Hardening recommendations & contract revisions
+│   ├── client and protocol working.md     # Progressive technical mechanics & study notebook
+│   └── MYDNS_Master_Protocol_and_Architecture_Guide.md # Comprehensive educational master guide
 ├── src/                                   # Application source code
 │   ├── protocol.py                        # Single shared dependency: SerDes engine
 │   ├── client.py                          # Host 1: Client CLI & timer engine
