@@ -1,6 +1,9 @@
 import math
 import threading
 import time
+from protocol import (
+    HEADER_SIZE, MSG_ERROR, MSG_QUERY, STATUS_FORMAT_ERROR, TYPE_A, MYDNSMessage,
+)
 
 
 class DNSCache:
@@ -55,3 +58,43 @@ class DNSCache:
     def __len__(self):
         with self._lock:
             return len(self._entries)
+
+BAD_DOMAIN = "bad.request"  # placeholder domain for ERROR replies (ADR-016)
+
+
+def build_error_reply(data):
+    """Build a MSG_ERROR / FORMAT_ERROR reply for a bad client datagram.
+
+    The TxID is copied from the first 2 bytes if there are at least 2;
+    otherwise it is 0. The domain is always the placeholder bad.request.
+    """
+    tx_id = 0
+    if isinstance(data, (bytes, bytearray)) and len(data) >= 2:
+        tx_id = int.from_bytes(data[:2], "big")
+    return MYDNSMessage(
+        tx_id, MSG_ERROR, TYPE_A, STATUS_FORMAT_ERROR, 0, BAD_DOMAIN
+    ).pack()
+
+
+def validate_client_datagram(data):
+    """Validate one datagram from a client.
+
+    Returns (query, None) if it is a well-formed MSG_QUERY, or
+    (None, error_reply_bytes) if it is malformed. Nothing malformed is
+    ever forwarded upstream.
+    """
+    try:
+        msg = MYDNSMessage.unpack(data)
+    except (ValueError, TypeError):
+        return None, build_error_reply(data)
+
+    # unpack() accepts RESPONSE and ERROR packets; a client may only send QUERY.
+    if msg.msg_type != MSG_QUERY:
+        return None, build_error_reply(data)
+
+    # unpack() ignores trailing bytes; we require an exact length so the
+    # original bytes we forward upstream are clean.
+    if len(data) != HEADER_SIZE + 1 + len(msg.domain):
+        return None, build_error_reply(data)
+
+    return msg, None
