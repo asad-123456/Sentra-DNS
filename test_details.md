@@ -4,7 +4,7 @@
 **Course:** CS-327 Computer Communication Networks (Fall 2026)  
 **Institution:** Department of Computer & Information Systems Engineering, NED University of Engineering & Technology  
 **Lead Client & Benchmarking Engineer:** Asadullah Zafar (`CS-24082`)  
-**Collaborators:** Atta-Ur-Rehman (`CS-24092`), Abdur Rahman (`CS-24098`)  
+**Collaborators:** Atta-Ur-Rehman (`CS-24092`), Abdur Rehman (`CS-24098`)  
 **Target Directory:** `c:\projects\Sentra_DNS\tests\`  
 **Document Purpose:** This document provides a complete technical specification of all test suites and benchmarking scripts inside the `tests/` directory. It explains exactly how every file is constructed, the programming languages and libraries used, the function-by-function architecture, and the underlying algorithms.
 

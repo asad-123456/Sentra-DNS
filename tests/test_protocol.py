@@ -2,7 +2,7 @@
 Unit Test Suite for MYDNS/1.0 Protocol SerDes Engine
 Course: CS-327 Computer Communication Networks (Fall 2026)
 Track: Option B — Mini DNS Service (MYDNS/1.0)
-Lead Protocol Engineer: Abdur Rahman (CS-24098)
+Lead Protocol Engineer: Abdur Rehman (CS-24098)
 Collaborators: Atta-Ur-Rehman (CS-24092), Asadullah Zafar (CS-24082)
 Target File: src/protocol.py
 

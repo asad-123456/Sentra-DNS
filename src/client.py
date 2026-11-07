@@ -3,7 +3,7 @@ MYDNS/1.0 Client Engine & Query CLI
 Course: CS-327 Computer Communication Networks (Fall 2026)
 Track: Option B — Mini DNS Service (MYDNS/1.0)
 Lead Client Engineer: Asadullah Zafar (CS-24082)
-Collaborators: Atta-Ur-Rehman (CS-24092), Abdur Rahman (CS-24098)
+Collaborators: Atta-Ur-Rehman (CS-24092), Abdur Rehman (CS-24098)
 Institution: Department of Computer & Information Systems Engineering,
              NED University of Engineering & Technology
 

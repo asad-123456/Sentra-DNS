@@ -3,7 +3,7 @@
 **Document Version:** 1.0  
 **Project Track:** CS-327 Computer Communication Networks — Complex Engineering Problem (Option B: Mini DNS Service)  
 **Authors:**  
-* Abdur Rahman (`CS-24098`) — *Lead: Protocol Engineering & Authoritative Server*  
+* Abdur Rehman (`CS-24098`) — *Lead: Protocol Engineering & Authoritative Server*  
 * Atta-Ur-Rehman (`CS-24092`) — *Lead: Resolver Caching Logic, Thread-Safe TTL Engine & Concurrency*  
 * Asadullah Zafar (`CS-24082`) — *Lead: Client Engine, Microsecond RTT Benchmarking Suite & Delay Modeling*  
 **Department:** Department of Computer & Information Systems Engineering, NED University of Engineering & Technology  
@@ -31,7 +31,7 @@ The system is deployed across **three physically or logically isolated network e
 +---------------------------+                 +-----------------------------+                 +-------------------------------+
 |       HOST 1: CLIENT      |                 |      HOST 2: RESOLVER       |                 |      HOST 3: AUTH SERVER      |
 |    IP: 192.168.1.10:Auto  |                 |     IP: 192.168.1.11:53000  |                 |     IP: 192.168.1.12:53053    |
-|   Lead: Asadullah Zafar   |                 |    Lead: Atta-Ur-Rehman     |                 |      Lead: Abdur Rahman       |
+|   Lead: Asadullah Zafar   |                 |    Lead: Atta-Ur-Rehman     |                 |      Lead: Abdur Rehman       |
 |                           |                 |                             |                 |                               |
 |  * Interactive CLI        |  Link 1 (UDP)   |  * Multi-Threaded UDP Loop  |  Link 2 (UDP)   |  * Master Zone Database       |
 |  * Stop-and-Wait ARQ      | --------------► |  * Thread-Safe In-Mem Cache | --------------► |    (src/zone.json)            |
@@ -272,14 +272,14 @@ Client (Host 1)                     Resolver (Host 2)                  Auth Serv
 
 | Component | Source File | Course Lead | Core Implementation Invariants | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| **Protocol Engine** | [`src/protocol.py`](file:///c:/projects/Sentra_DNS/src/protocol.py) | Abdur Rahman | 64-bit Big-Endian header (`!HBBBxH`), SerDes validation, Wireshark hex dumper. | **VERIFIED (SHA-256 Validated)** |
+| **Protocol Engine** | [`src/protocol.py`](file:///c:/projects/Sentra_DNS/src/protocol.py) | Abdur Rehman | 64-bit Big-Endian header (`!HBBBxH`), SerDes validation, Wireshark hex dumper. | **VERIFIED (SHA-256 Validated)** |
 | **Unit Test Suite** | [`tests/test_protocol.py`](file:///c:/projects/Sentra_DNS/tests/test_protocol.py) | All Members | 17 automated tests covering boundary invariants ($L=1$ to $L=255$), big-endian wire bytes, error raises. | **17/17 PASSED (0.001s)** |
-| **Host 3: Auth Server** | `src/authoritative_server.py`<br>`src/zone.json` | Abdur Rahman | UDP socket bound to port `53053`, JSON zone parsing, authoritative TTL injection. | **Ready for Build** |
+| **Host 3: Auth Server** | `src/authoritative_server.py`<br>`src/zone.json` | Abdur Rehman | UDP socket bound to port `53053`, JSON zone parsing, authoritative TTL injection. | **Ready for Build** |
 | **Host 2: Resolver** | `src/resolver.py` | Atta-Ur-Rehman | Multi-threaded UDP server on port `53000`, thread-safe cache dict, dynamic TTL decay. | **Ready for Build** |
 | **Host 1: Client** | `src/client.py` | Asadullah Zafar | Interactive CLI, microsecond `time.perf_counter()` timer, Stop-and-Wait ARQ ($1.5\text{s}$). | **Ready for Build** |
 | **Benchmark Suite** | `tests/benchmark_runner.py` | Asadullah Zafar | 10-trial automated Hit vs. Miss test, statistical $\mu$ and $\sigma$ calculation, Matplotlib export. | **Ready for Build** |
 
 ---
 *Signed by CS-327 Engineering Project Team:*  
-**Abdur Rahman** (`CS-24098`) &nbsp;&nbsp;|&nbsp;&nbsp; **Atta-Ur-Rehman** (`CS-24092`) &nbsp;&nbsp;|&nbsp;&nbsp; **Asadullah Zafar** (`CS-24082`)
+**Abdur Rehman** (`CS-24098`) &nbsp;&nbsp;|&nbsp;&nbsp; **Atta-Ur-Rehman** (`CS-24092`) &nbsp;&nbsp;|&nbsp;&nbsp; **Asadullah Zafar** (`CS-24082`)
 

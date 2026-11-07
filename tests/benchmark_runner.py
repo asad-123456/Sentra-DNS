@@ -3,7 +3,7 @@ Automated Multi-Trial Performance Benchmarking Suite (Host 1)
 Course: CS-327 Computer Communication Networks (Fall 2026)
 Track: Option B — Mini DNS Service (MYDNS/1.0)
 Lead Client Engineer: Asadullah Zafar (CS-24082)
-Collaborators: Atta-Ur-Rehman (CS-24092), Abdur Rahman (CS-24098)
+Collaborators: Atta-Ur-Rehman (CS-24092), Abdur Rehman (CS-24098)
 
 Satisfies Rubric Criterion 3 (Evaluating Performance & Empirical Rigor):
 1. Evaluates two distinct conditions: Cache Miss vs. Cache Hit over N >= 5 trials.

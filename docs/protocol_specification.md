@@ -2,7 +2,7 @@
 
 **Protocol Name:** `MYDNS/1.0`  
 **Standard Track:** CS-327 Computer Communication Networks — Complex Engineering Problem (Option B)  
-**Authors:** Abdur Rahman (`CS-24098`), Atta-Ur-Rehman (`CS-24092`), Asadullah Zafar (`CS-24082`)  
+**Authors:** Abdur Rehman (`CS-24098`), Atta-Ur-Rehman (`CS-24092`), Asadullah Zafar (`CS-24082`)  
 **Department:** Computer & Information Systems Engineering, NED University of Engineering & Technology  
 **Document Status:** Final Draft / Standard Specification  
 

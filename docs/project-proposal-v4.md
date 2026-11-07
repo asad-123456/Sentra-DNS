@@ -10,7 +10,7 @@
 ### **Group Members & Lead Responsibilities**
 * **Member 1:** Asadullah Zafar (`CS-24082`) — *Lead: Client Engine, Microsecond RTT Benchmarking Suite & Delay Modeling*
 * **Member 2:** Atta-Ur-Rehman (`CS-24092`) — *Lead: Resolver Caching Logic, Thread-Safe TTL Engine & Failure Recovery*
-* **Member 3:** Abdur Rahman (`CS-24098`) — *Lead: Authoritative Zone Server, Packet Encoding Specification & Wireshark Encapsulation Analysis*
+* **Member 3:** Abdur Rehman (`CS-24098`) — *Lead: Authoritative Zone Server, Packet Encoding Specification & Wireshark Encapsulation Analysis*
 
 ---
 
@@ -82,4 +82,4 @@ Communication uses a fixed **64-bit (8-byte) binary header** packed using Python
 
 **Signatures:**
 
-`_________________________` (Asadullah Zafar) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; `_________________________` (Atta-Ur-Rehman) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; `_________________________` (Abdur Rahman)
+`_________________________` (Asadullah Zafar) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; `_________________________` (Atta-Ur-Rehman) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; `_________________________` (Abdur Rehman)

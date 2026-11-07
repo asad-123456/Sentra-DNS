@@ -5,7 +5,7 @@
 **Team Members:**  
 * **Host 1 (Client):** Asadullah Zafar (`CS-24082`)  
 * **Host 2 (Caching Resolver):** Atta-Ur-Rehman (`CS-24092`)  
-* **Host 3 (Authoritative Server):** Abdur Rahman (`CS-24098`)  
+* **Host 3 (Authoritative Server):** Abdur Rehman (`CS-24098`)  
 
 This document is your **step-by-step operational script** for setting up, executing, and defending the project during the live evaluation before course instructors.
 
@@ -82,7 +82,7 @@ Always start the programs in **reverse dependency order**:
 ---
 
 ### Step 3.1: Start Host 3 (Authoritative Server)
-On **Abdur Rahman's Laptop** (`192.168.43.30`):
+On **Abdur Rehman's Laptop** (`192.168.43.30`):
 ```powershell
 python src/authoritative_server.py --port 53053 --zone src/zone.json
 ```
@@ -90,7 +90,7 @@ python src/authoritative_server.py --port 53053 --zone src/zone.json
 ```text
 ======================================================================
 [AUTH SERVER] MYDNS/1.0 Authoritative Server Started
-[AUTH SERVER] Lead: Abdur Rahman (CS-24098)
+[AUTH SERVER] Lead: Abdur Rehman (CS-24098)
 [AUTH SERVER] Loaded 5 records from src/zone.json
 [AUTH SERVER] Listening on 0.0.0.0:53053...
 ======================================================================

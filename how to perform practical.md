@@ -5,7 +5,7 @@
 **Team Members & Roles:**
 * **Host 1 (Client & Benchmarking Lead):** Asadullah Zafar (`CS-24082`)
 * **Host 2 (Caching Resolver Lead):** Atta-Ur-Rehman (`CS-24092`)
-* **Host 3 (Protocol & Authoritative Server Lead):** Abdur Rahman (`CS-24098`)
+* **Host 3 (Protocol & Authoritative Server Lead):** Abdur Rehman (`CS-24098`)
 
 ---
 
@@ -13,7 +13,7 @@
 
 | Member | Machine Role | Script to Run | Listening Port | Target / Upstream |
 | :--- | :--- | :--- | :--- | :--- |
-| **Abdur Rahman** (`CS-24098`) | **Host 3:** Authoritative Zone Server | `src/authoritative_server.py` | UDP `53053` | None (reads `src/zone.json`) |
+| **Abdur Rehman** (`CS-24098`) | **Host 3:** Authoritative Zone Server | `src/authoritative_server.py` | UDP `53053` | None (reads `src/zone.json`) |
 | **Atta-Ur-Rehman** (`CS-24092`) | **Host 2:** Caching Recursive Resolver | `src/resolver.py` | UDP `53000` | Upstream Host 3 (`<Abdur-IP>:53053`) |
 | **Asadullah Zafar** (`CS-24082`) | **Host 1:** Client Engine & Benchmarking | `src/client.py` | Ephemeral port | Queries Host 2 (`<Atta-IP>:53000`) |
 
