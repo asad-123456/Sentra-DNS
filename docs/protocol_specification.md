@@ -163,6 +163,50 @@ HOST 1 (Client)               HOST 2 (Resolver)             HOST 3 (Auth Server)
       |    status: SERVER_FAILURE    |                              |
       |    ip: 0.0.0.0, ttl: 0       |                              |
 ```
+### 4.5 Exchange 5: Malformed Datagram (`ERROR`)
+Triggered when a node receives a datagram that fails `unpack()` (truncated, bad length, unknown query type). The reply policy is recorded in ADR-016.
+
+```
+HOST 1 (Client)               HOST 2 (Resolver)             HOST 3 (Auth Server)
+      |                              |                              |
+      |--- 1. malformed datagram --->| [unpack() fails]             |
+      |                              | [not forwarded upstream]     |
+      |<-- 2. ERROR -----------------|                              |
+      |    status: FORMAT_ERROR      |                              |
+      |    TxID: first 2 bytes (0 if fewer)                         |
+      |    domain: bad.request (20 B)|                              |
+```
+
+Host 3 applies the same rule to a malformed datagram sent directly to port 53053.
+
+### 4.6 Action on Receipt
+
+"Malformed" means `unpack()` fails: datagram too short, illegal domain length, truncated trailer, or a query type other than `TYPE_A`.
+
+| Receiver | Message received | Action |
+| :--- | :--- | :--- |
+| Authoritative (Host 3) | Valid QUERY, name in zone | Reply `RESPONSE`, `SUCCESS`, zone IP and TTL. TxID and domain echoed exactly as received; the lookup ignores letter case. |
+| Authoritative (Host 3) | Valid QUERY, name not in zone | Reply `RESPONSE`, `NXDOMAIN`, ip `0.0.0.0`, ttl 0. TxID and domain echoed. |
+| Authoritative (Host 3) | Malformed datagram | Reply `ERROR`, `FORMAT_ERROR`, TxID from first 2 bytes (0 if fewer), domain `bad.request`. |
+| Authoritative (Host 3) | Well-formed `RESPONSE` or `ERROR` | Ignore and log. No reply. |
+| Resolver (Host 2) | Malformed client datagram | Reply `ERROR`, `FORMAT_ERROR`, TxID from first 2 bytes (0 if fewer), domain `bad.request`. Never forwarded upstream. |
+| Resolver (Host 2) | Valid QUERY, cache hit | Reply `RESPONSE`, `SUCCESS` with the remaining TTL. No upstream traffic. |
+| Resolver (Host 2) | Valid QUERY, cache miss | Forward to Host 3 (0.5 s timeout, 2 attempts). |
+| Resolver (Host 2) | Host 3 `RESPONSE`, `SUCCESS` | Cache under the lowercase domain, relay to the client. |
+| Resolver (Host 2) | Host 3 `RESPONSE`, `NXDOMAIN` | Relay to the client. Not cached. |
+| Resolver (Host 2) | Host 3 `ERROR` | Never cached. Relay behavior: *[to be confirmed by Member 2]* |
+| Resolver (Host 2) | No answer from Host 3 after 2 attempts | Reply `RESPONSE`, `SERVER_FAILURE` to the client at about T = 1.0 s. |
+| Client (Host 1) | `RESPONSE` with matching TxID | Accept and report the status (`SUCCESS`, `NXDOMAIN` or `SERVER_FAILURE`). |
+| Client (Host 1) | `ERROR`, `FORMAT_ERROR`, matching TxID | Terminal: report the error, no retransmission (ADR-015). |
+| Client (Host 1) | Datagram that fails `unpack()` or has a non-matching TxID | Ignore and keep waiting until the current attempt's deadline (ADR-015). |
+| Client (Host 1) | No valid reply within 1.5 s | Retransmit with the same TxID, up to 3 retries, then report failure. |
+
+### 4.7 Retransmission and Duplicates
+
+* A client retransmission reuses the original TxID, so every node can treat it as the same query.
+* Host 3 keeps no per-query state. Each datagram is answered independently, so a duplicate or retransmitted QUERY simply produces another identical `RESPONSE`. Duplicates are therefore harmless.
+* The resolver's upstream budget (0.5 s x 2 = 1.0 s) is deliberately shorter than the client's 1.5 s timer, so `SERVER_FAILURE` reaches the client before it retransmits (ADR-005).
+* A late `RESPONSE` for a query the client has already finished, or for a TxID it is not waiting on, is ignored by the client.
 
 ---
 
@@ -190,6 +234,9 @@ stateDiagram-v2
     AuthTimeout --> SendServFail : Send SERVER_FAILURE to client
     SendServFail --> ResolverListening
     RelayClient --> ResolverListening
+    ResolverListening --> SendFormatError : Recv malformed datagram
+    SendFormatError --> ResolverListening : Send ERROR / FORMAT_ERROR (ADR-016)
+    QuerySent --> ClientError : Recv ERROR with matching TxID (no retry)
 ```
 
 ---
@@ -234,30 +281,30 @@ stateDiagram-v2
 
 ## 7. Encapsulation Model Mapping (Requirement R5)
 
-When captured using Wireshark, every `MYDNS/1.0` packet cleanly maps onto the 4-layer network encapsulation model:
+When captured using Wireshark, every `MYDNS/1.0` packet maps onto the five-layer Internet protocol stack used in Lecture 03 (Application, Transport, Network, Link, Physical). The physical layer is not visible in a capture, so Wireshark shows four of the five:
 
 ```
 +---------------------------------------------------------------------------------------+
-| LAYER 2: ETHERNET II FRAME                                                            |
+| LINK LAYER: ETHERNET II FRAME                                                            |
 | [ Dest MAC (6B) ] [ Src MAC (6B) ] [ EtherType: 0x0800 (IPv4) (2B) ]                  |
 +---------------------------------------------------------------------------------------+
   |                                                                                    
   v                                                                                    
 +---------------------------------------------------------------------------------------+
-| LAYER 3: IPv4 DATAGRAM                                                                |
+| NETWORK LAYER: IPv4 DATAGRAM                                                                |
 | [ Version/IHL (1B) ] [ Total Length (2B) ] [ Protocol: 17 (UDP) (1B) ]                 |
 | [ Source IP (4B) ] [ Destination IP (4B) ]                                            |
 +---------------------------------------------------------------------------------------+
     |                                                                                  
     v                                                                                  
 +---------------------------------------------------------------------------------------+
-| LAYER 4: UDP DATAGRAM                                                                 |
+| TRANSPORT LAYER: UDP SEGMENT                                                                  |
 | [ Source Port (2B) ] [ Dest Port: 53000/53053 (2B) ] [ UDP Length (2B) ] [ Checksum ] |
 +---------------------------------------------------------------------------------------+
       |                                                                                
       v                                                                                
 +---------------------------------------------------------------------------------------+
-| LAYER 7: MYDNS/1.0 APPLICATION PAYLOAD                                                |
+| APPLICATION LAYER: MYDNS/1.0 MESSAGE                                                |
 | [ TxID (2B) ] [ MsgType (1B) ] [ QType (1B) ] [ Status (1B) ] [ Pad (1B) ] [ TTL (2B)] |
 | [ Domain Len (1B) ] [ Domain String (Variable) ] [ IPv4 (4B, if Response) ]           |
 +---------------------------------------------------------------------------------------+

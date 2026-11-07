@@ -24,6 +24,7 @@
 * [ADR-013: Implementation of Host 1 Client Engine & Real Socket Benchmark Suite](#adr-013-implementation-of-host-1-client-engine--real-socket-benchmark-suite)
 * [ADR-014: Architectural Revisions, Client Exception Hardening & Benchmark Alignment Recommendations](#adr-014-architectural-revisions-client-exception-hardening--benchmark-alignment-recommendations)
 * [ADR-015: Client Defensive Hardening, Fast-Fail Terminal Error Handling & Application-Level Throughput Benchmarking](#adr-015-client-defensive-hardening-fast-fail-terminal-error-handling--application-level-throughput-benchmarking)
+* [ADR-016: Malformed-Packet Policy for Resolver and Authoritative Server](#adr-016-malformed-packet-policy-for-resolver-and-authoritative-server)
 
 ---
 
@@ -198,6 +199,26 @@
   4. Updated `tests/benchmark_runner.py` with dynamic payload bytes, sustained QPS, and KB/s throughput metrics in the comparison table and a 3-panel Matplotlib chart.
   5. Expanded `tests/test_client.py` and `tests/test_benchmark.py` to 29 tests (100% pass rate in 1.0s).
 * **Impact:** Fully satisfies CS-327 Requirement R6 (Metrics 1, 2, and 3) and guarantees zero client crashes from Wi-Fi background noise.
+
+---
+
+### ADR-016: Malformed-Packet Policy for Resolver and Authoritative Server
+* **Date:** 2026-11-08
+* **Status:** Accepted
+* **Context:** ADR-008 reserves `MSG_ERROR` for wire-level syntax violations, and ADR-015 defines how the client reacts to one, but no ADR said what Host 2 (resolver) and Host 3 (authoritative server) do with a datagram that fails `MYDNSMessage.unpack()`. Dropping it silently would leave the client waiting out its full 1.5s timer before retransmitting.
+* **Alternatives Considered:**
+  1. *Drop malformed datagrams silently:* Simplest, but the client always waits 1.5s and retransmits something that can never succeed.
+  2. *Resolver forwards client bytes upstream without validating them:* Garbage would travel across Link 2 and be rejected by Host 3, wasting a round trip and bandwidth.
+* **Decision:**
+  1. A datagram for which `unpack()` raises `ValueError`, `TypeError` or `struct.error` is answered with `MSG_ERROR`, `STATUS_FORMAT_ERROR`, `ttl=0`, domain `bad.request`.
+  2. The reply's TxID is copied from the first two bytes of the offending datagram, or is `0` if the datagram is shorter than two bytes.
+  3. A query type other than `TYPE_A` fails `unpack()` and is therefore treated as malformed.
+  4. Host 2 validates every client datagram first. Malformed client datagrams are answered by Host 2 and never forwarded to Host 3.
+  5. A well-formed `MSG_RESPONSE` or `MSG_ERROR` arriving at Host 3 is ignored and logged, with no reply.
+  6. Host 2 never caches an `MSG_ERROR` received from Host 3.
+  7. Host 3 echoes the query's TxID and domain exactly as received (original letter case). Only the zone lookup is case-insensitive.
+* **Rationale:** The client can fail fast on a matching-TxID ERROR (ADR-015) instead of burning 1.5s. Validating at the resolver keeps garbage off Link 2. Host 3 still handles garbage itself, because a packet can reach it directly, and that behavior is demonstrated separately in the R7 malformed-packet test (garbage to port 53053 for Host 3, garbage to port 53000 for Host 2).
+* **Impact:** No change to the wire format, and `src/protocol.py` is untouched. An ERROR packet with the placeholder domain is 9 + 11 = 20 bytes (`bad.request` is 11 characters). The TxID in an ERROR may be meaningless when the original datagram was garbage, which is an accepted limitation. The resolver's relay behavior for an upstream ERROR is recorded in the spec's action table once Member 2 confirms it.
 
 ---
 

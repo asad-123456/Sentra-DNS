@@ -36,7 +36,10 @@ c:\projects\Sentra_DNS\
 │   ├── authoritative_server.py            # Host 3: Authoritative zone server
 │   └── zone.json                          # Host 3: Master zone database
 ├── tests/                                 # Verification & benchmarking suite
-│   ├── test_protocol.py                   # Protocol SerDes unit tests
+│   ├── test_protocol.py                   # Protocol SerDes 
+│   ├── auth_local_check.py                # Host 3 localhost check (7 checks incl. 50-query stress)
+│   ├── remote_auth_check.py               # Host 3 reachability check over the hotspot
+unit tests
 │   └── benchmark_runner.py                # Automated RTT benchmarking & graphing
 ├── Decisions.md                           # Architecture decision records
 └── flow.md                                # Program control & data flow audit (This file)
@@ -50,6 +53,7 @@ c:\projects\Sentra_DNS\
 | **Host 2: Resolver** | `192.168.1.11` / `192.168.43.20` | `src/resolver.py` | `53000` | UDP (`SOCK_DGRAM`) |
 | **Host 3: Auth Server** | `192.168.1.12` / `192.168.43.30` | `src/authoritative_server.py` | `53053` | UDP (`SOCK_DGRAM`) |
 
+> **Notes:** The IPs above are examples. The live demo uses the hotspot addresses recorded in the report's IP plan. Packet sizes of 28 B and 32 B apply only to `portal.neduet.local` (L = 19): QUERY and ERROR are 9 + L bytes, RESPONSE is 13 + L bytes.
 ---
 
 ## 2. End-to-End Architectural Flow Diagram
@@ -97,11 +101,11 @@ c:\projects\Sentra_DNS\
 +---------------------------------------------------------------------------------------------------------+
 |                                   HOST 3: AUTHORITATIVE ZONE SERVER                                     |
 |                                                                                                         |
-|   authoritative_server.py::main_loop()                                                                  |
+|   authoritative_server.py::main()                                                                  |
 |           │                                                                                             |
 |           ├──> sock.recvfrom() ───► protocol.py::MYDNSMessage.unpack(data)                              |
 |           │                                                                                             |
-|           ├──> authoritative_server.py::lookup_zone(domain, zone_db)                                   |
+|           ├──> authoritative_server.py::lookup_zone(domain, zone_data)                                 |
 |           │            │                                                                                |
 |           │            ├── [DOMAIN FOUND]                                                               |
 |           │            │        └──> MYDNSMessage(status=STATUS_SUCCESS, ip=zone_ip, ttl=zone_ttl)     |
@@ -187,7 +191,7 @@ c:\projects\Sentra_DNS\
    - `authoritative_server.py:main()` listens in a socket loop on `0.0.0.0:53053`.
    - `data, resolver_addr = sock.recvfrom(512)`.
    - Calls `protocol.py:MYDNSMessage.unpack(data)`.
-   - Checks `zone_data = zone_dict.get(query.domain)`.
+   - Calls `authoritative_server.py:lookup_zone(query.domain, zone_data)`, which lowercases the domain before the dictionary lookup. The response echoes `query.domain` exactly as received.
    - Domain found in `zone.json`: `{"ip": "10.0.1.5", "ttl": 120}`.
    - Constructs `MYDNSMessage(tx_id=query.tx_id, msg_type=MSG_RESPONSE, status=STATUS_SUCCESS, ttl=120, domain=query.domain, ip_address="10.0.1.5")`.
    - Calls `response.pack()` (32 bytes).
@@ -245,6 +249,13 @@ c:\projects\Sentra_DNS\
    - Saves plot to `gemini-docs/rtt_benchmark_plot.png`.
 
 ---
+### Scenario E: Malformed Datagram (ADR-016)
+1. A datagram that cannot be parsed (for example, 3 bytes `DE AD BE`) arrives at Host 2 or, if sent directly, at Host 3.
+2. **At Host 2:** `MYDNSMessage.unpack()` raises `ValueError`, `TypeError` or `struct.error`. The resolver builds `MYDNSMessage(tx_id=<first 2 bytes, or 0>, msg_type=MSG_ERROR, status=STATUS_FORMAT_ERROR, ttl=0, domain="bad.request")`, packs it (20 bytes) and sends it to `client_addr`. Nothing is forwarded to Host 3.
+3. **At Host 3:** `authoritative_server.py:main()` catches the same three exceptions and sends the same ERROR to the sender. A well-formed `MSG_RESPONSE` or `MSG_ERROR` is ignored and logged, with no reply. A catch-all handler keeps the server alive on any other unexpected error.
+4. **At Host 1:** an `MSG_ERROR` with a matching TxID is terminal (ADR-015). The client reports it and does not wait out the 1.5 s timer.
+
+---
 
 ## 4. Cross-Module Function Call Reference
 
@@ -260,9 +271,11 @@ c:\projects\Sentra_DNS\
 | `resolver.py:handle()` | `forward_to_auth()` | `src/resolver.py` | `query, client_sock, client_addr` | `None` | Recursively resolves cache miss from Host 3 |
 | `resolver.py:handle()` | `MYDNSMessage.pack()` | `src/protocol.py` | `None` (uses `self`) | `bytes` (32B) | Serializes cache hit response |
 | `resolver.py:forward_to_auth()` | `DNSCache.put()` | `src/resolver.py` | `domain, ip, ttl` | `None` | Stores authoritative response in cache |
-| `auth_server.py:main()` | `MYDNSMessage.unpack()` | `src/protocol.py` | `data: bytes` | `MYDNSMessage` instance | Parses resolver query |
-| `auth_server.py:main()` | `lookup_zone()` | `src/authoritative_server.py`| `domain, zone_data` | `dict` or `None` | Queries zone database for domain record |
-| `auth_server.py:main()` | `MYDNSMessage.pack()` | `src/protocol.py` | `None` (uses `self`) | `bytes` (32B) | Serializes authoritative response |
+| `authoritative_server.py:main()` | `MYDNSMessage.unpack()` | `src/protocol.py` | `data: bytes` | `MYDNSMessage` instance | Parses resolver query |
+| `authoritative_server.py:main()` | `lookup_zone()` | `src/authoritative_server.py`| `domain, zone_data` | `dict` or `None` | Queries zone database for domain record |
+| `authoritative_server.py:main()` | `MYDNSMessage.pack()` | `src/protocol.py` | `None` (uses `self`) | `bytes` (32B) | Serializes authoritative response |
+| `authoritative_server.py:main()` | `load_zone()` | `src/authoritative_server.py` | `path: str` | `dict` (lowercase keys) | Loads `zone.json` once at startup |
+| `authoritative_server.py:main()` | `build_response()` | `src/authoritative_server.py` | `q, zone_data` | `MYDNSMessage` | Builds the SUCCESS or NXDOMAIN reply, echoing TxID and domain |
 | `benchmark_runner.py` | `client.py:query_domain()` | `src/client.py` | `res_ip, res_port, domain` | `(response, rtt_ms)` | Executes automated benchmark trials |
 
 ---
