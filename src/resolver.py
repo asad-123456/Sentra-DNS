@@ -106,20 +106,31 @@ def validate_client_datagram(data):
 
 
 
-UPSTREAM_TIMEOUT = 1.0  # must stay below the client's 1.5 s retry timer
+# Single upstream attempt of 1.0 s (no retry). This is deliberately below the
+# client's 1.5 s retry timer, so SERVER_FAILURE reaches the client first.
+# Note: ADR-005 / spec 4.4 describe 2 x 0.5 s; the total (1.0 s) is the same.
+UPSTREAM_TIMEOUT = 1.0
+UPSTREAM_ATTEMPTS = 2    # 2 x 0.5 s = 1.0 s, below the client's 1.5 s timer
 
 
-def forward_upstream(data, host, port, timeout=UPSTREAM_TIMEOUT):
-    """Send the client's original bytes to Auth and return its reply bytes,
-    or None on timeout/error. A fresh connected socket per query means only
-    Auth's replies can arrive and concurrent queries never mix."""
+def forward_upstream(data, host, port, timeout=UPSTREAM_TIMEOUT,
+                     attempts=UPSTREAM_ATTEMPTS):
+    """Send the client's original bytes to Auth, retrying on timeout.
+    Returns Auth's reply bytes, or None if every attempt fails. One connected
+    socket is used for all attempts, so a late reply to attempt 1 is still
+    accepted during attempt 2."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        sock.settimeout(timeout)
         sock.connect((host, port))
-        sock.send(data)
-        return sock.recv(512)
-    except OSError:  # includes timeout and "connection reset" (Auth down)
+        for _ in range(attempts):
+            sock.settimeout(timeout)
+            try:
+                sock.send(data)
+                return sock.recv(512)
+            except socket.timeout:
+                continue
+        return None
+    except OSError:  # e.g. connection reset because Auth is down
         return None
     finally:
         sock.close()
@@ -218,7 +229,7 @@ def serve(listen_host, listen_port, upstream_host, upstream_port,
 def main():
     ap = argparse.ArgumentParser(description="MYDNS/1.0 caching resolver")
     ap.add_argument("--host", default="0.0.0.0")
-    ap.add_argument("--port", type=int, default=5300)
+    ap.add_argument("--port", type=int, default=53000)
     ap.add_argument("--upstream-host", default="127.0.0.1")
     ap.add_argument("--upstream-port", type=int, default=53053)
     ap.add_argument("--timeout", type=float, default=UPSTREAM_TIMEOUT)
