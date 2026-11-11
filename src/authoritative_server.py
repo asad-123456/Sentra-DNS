@@ -56,6 +56,10 @@ def main():
             try:
                 try:
                     q = MYDNSMessage.unpack(data)
+                    # NEW (ADR-016 point 9): reject bytes beyond the length the fields imply
+                    expected = 9 + len(q.domain) + (4 if q.msg_type == MSG_RESPONSE else 0)  # NEW
+                    if len(data) != expected:  # NEW
+                        raise ValueError(f"length {len(data)}, expected {expected} (trailing bytes)")  # NEW
                 except (ValueError, TypeError, struct.error) as e:
                     tx = int.from_bytes(data[:2], "big") if len(data) >= 2 else 0
                     err = MYDNSMessage(tx, MSG_ERROR, TYPE_A, STATUS_FORMAT_ERROR,

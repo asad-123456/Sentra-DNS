@@ -25,6 +25,7 @@
 * [ADR-014: Architectural Revisions, Client Exception Hardening & Benchmark Alignment Recommendations](#adr-014-architectural-revisions-client-exception-hardening--benchmark-alignment-recommendations)
 * [ADR-015: Client Defensive Hardening, Fast-Fail Terminal Error Handling & Application-Level Throughput Benchmarking](#adr-015-client-defensive-hardening-fast-fail-terminal-error-handling--application-level-throughput-benchmarking)
 * [ADR-016: Malformed-Packet Policy for Resolver and Authoritative Server](#adr-016-malformed-packet-policy-for-resolver-and-authoritative-server)
+* [ADR-017: Single 1.0 s Upstream Attempt at the Resolver](#adr-017-single-10-s-upstream-attempt-at-the-resolver)
 
 ---
 
@@ -94,6 +95,7 @@
   2. *Single Upstream Attempt of 1.4s:* Leaves no room for packet loss recovery between Resolver and Auth server.
 * **Decision:** Set the Resolver's upstream forwarding timeout to **$0.5\text{s}$ per attempt**, allowing 2 attempts ($1.0\text{s}$ total).
 * **Rationale:** $1.0\text{s} < 1.5\text{s}$. When Host 3 is offline, Host 2 detects failure and sends a `SERVER_FAILURE` response to Host 1 at $T = 1.0\text{s}$, arriving safely before Host 1's $1.5\text{s}$ client retransmission timer fires.
+* **Update (2026-11-11):** The implemented resolver makes a single 1.0 s upstream attempt instead of 2 x 0.5 s. The 1.0 s total is unchanged. See ADR-017.
 
 ---
 
@@ -169,6 +171,7 @@
 * **SHA-256 Checksums:**
   * **Canonical Repo / LF:** `351BAF0F33C662E9A50E64AC64F7B02EA7151F36D55F2A129256CF5DABA0521B`
   * **Windows Checkout (CRLF):** `22EA136B541C022E6A0C62296B19371BEFF34705173D2AF7A4B2487690016797`
+  * **Update 2026-11-11 (commit 67656ef):** docstring-only change (author name spelling "Rahman" to "Rehman"), no code change. LF `DAAC2EE6758E7506D10468B2132642F2BE9AA3FAF7D1BB55E09DD1DC0502A12B`, Windows CRLF `363E9D66D310363DBD939A87BA3DC84B4E7216843F0E04E003D5799379F52A31`. The hashes listed above are superseded.
   * *(Historical note: Initial commit `fe23e16` before the `__main__` block had hash `C9E1188FA63F5261665EDE7CBA23FF8B17BA7F25E1CBF3D5398D34E6D52968B9` (LF) / `BD676BC2C31AF15147FF34B6110A252464DCE83CBF11749CF40AD1A972E20FD1` (CRLF); `81AA0F...` was the pre-commit buffer without an EOF newline).*
 * **Impact:** Unblocks Member 1 (Client), Member 2 (Resolver), and Member 3 (Authoritative Server) for parallel independent development.
 
@@ -217,8 +220,24 @@
   5. A well-formed `MSG_RESPONSE` or `MSG_ERROR` arriving at Host 3 is ignored and logged, with no reply.
   6. Host 2 never caches an `MSG_ERROR` received from Host 3.
   7. Host 3 echoes the query's TxID and domain exactly as received (original letter case). Only the zone lookup is case-insensitive.
+  8. Host 2 answers a well-formed `MSG_RESPONSE` or `MSG_ERROR`, or a QUERY with trailing bytes, sent by a client with the same `FORMAT_ERROR` reply and never forwards it. Host 3 ignores a well-formed `MSG_RESPONSE` or `MSG_ERROR` (point 5), because only the resolver talks to it.
+  9. A datagram longer than the length its own fields imply (9 + L, or 13 + L for a RESPONSE) is malformed at both Host 2 and Host 3.
+  10. Host 2 relays an `MSG_ERROR` received from Host 3 to the client unchanged and never caches it (refines point 6).
 * **Rationale:** The client can fail fast on a matching-TxID ERROR (ADR-015) instead of burning 1.5s. Validating at the resolver keeps garbage off Link 2. Host 3 still handles garbage itself, because a packet can reach it directly, and that behavior is demonstrated separately in the R7 malformed-packet test (garbage to port 53053 for Host 3, garbage to port 53000 for Host 2).
-* **Impact:** No change to the wire format, and `src/protocol.py` is untouched. An ERROR packet with the placeholder domain is 9 + 11 = 20 bytes (`bad.request` is 11 characters). The TxID in an ERROR may be meaningless when the original datagram was garbage, which is an accepted limitation. The resolver's relay behavior for an upstream ERROR is recorded in the spec's action table once Member 2 confirms it.
+* **Impact:** No change to the wire format, and `src/protocol.py` is untouched. An ERROR packet with the placeholder domain is 9 + 11 = 20 bytes (`bad.request` is 11 characters). The TxID in an ERROR may be meaningless when the original datagram was garbage, which is an accepted limitation. The resolver relays an upstream ERROR to the client unchanged (confirmed by Member 2).
+
+---
+
+### ADR-017: Single 1.0 s Upstream Attempt at the Resolver
+* **Date:** 2026-11-11
+* **Status:** Accepted (replaces the two-attempt structure of ADR-005; the 1.0 s total is unchanged)
+* **Context:** ADR-005 specified two upstream attempts of 0.5 s each. The final resolver (Member 2) makes one upstream attempt with a 1.0 s timeout and then answers the client with `SERVER_FAILURE`. Host 2 listens on UDP 53000 by default.
+* **Alternatives Considered:**
+  1. *Keep 2 x 0.5 s (ADR-005):* A single lost datagram on Link 2 is retried within the budget, but a reply that takes longer than 0.5 s counts as a failure even though Host 3 is alive.
+  2. *One attempt of 1.4 s:* Rejected in ADR-005 because it leaves too little margin below the client's 1.5 s timer.
+* **Decision:** Host 2 sends one upstream QUERY and waits up to 1.0 s. If no valid answer arrives, it replies `MSG_RESPONSE` / `STATUS_SERVER_FAILURE` to the client.
+* **Rationale:** 1.0 s is still below 1.5 s, so `SERVER_FAILURE` reaches the client before its retransmission timer fires. A reply delayed by hotspot jitter (between 0.5 s and 1.0 s) is now accepted instead of being counted as a timeout.
+* **Impact:** A single lost upstream datagram is no longer retried and surfaces as `SERVER_FAILURE`, which the client treats as final. The R7 capture shows one upstream attempt at T = 0 and `SERVER_FAILURE` at about T = 1.0 s. ADR-005, spec sections 4.4, 4.6 and 4.7, and `flow.md` Scenarios B and C are updated to match.
 
 ---
 

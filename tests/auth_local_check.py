@@ -92,5 +92,12 @@ with ThreadPoolExecutor(max_workers=50) as ex:
 print(f"stress: {sum(stress)}/50 correct")
 check("50 parallel queries, none dropped or mismatched", all(stress))
 
+# 8. valid query followed by trailing bytes -> FORMAT_ERROR
+d = exchange(MYDNSMessage(0x0008, MSG_QUERY, domain="portal.neduet.local").pack() + b"xx")
+r = MYDNSMessage.unpack(d) if d else None
+check("query with trailing bytes -> ERROR, FORMAT_ERROR",
+      r is not None and r.msg_type == MSG_ERROR
+      and r.status == STATUS_FORMAT_ERROR and r.tx_id == 0x0008)
+
 print(f"\n{sum(results)}/{len(results)} checks passed")
 sys.exit(0 if all(results) else 1)

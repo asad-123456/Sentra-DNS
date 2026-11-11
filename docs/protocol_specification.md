@@ -148,17 +148,15 @@ HOST 1 (Client)               HOST 2 (Resolver)             HOST 3 (Auth Server)
 ```
 
 ### 4.4 Exchange 4: Upstream Failure & Timeout (`SERVER_FAILURE`) (Requirement R7)
-Triggered when Host 3 is offline, crashed, or dropping datagrams. To satisfy the client stop-and-wait timeout of $1.5\text{s}$, Host 2 waits $0.5\text{s}$ per upstream attempt ($1.0\text{s}$ total across 2 attempts), reliably returning `SERVER_FAILURE` to Host 1 before Host 1's retransmission timer triggers.
+Triggered when Host 3 is offline, crashed, or dropping datagrams. To satisfy the client stop-and-wait timeout of $1.5\text{s}$, Host 2 makes a single upstream attempt with a $1.0\text{s}$ timeout, reliably returning `SERVER_FAILURE` to Host 1 before Host 1's retransmission timer triggers.
 
 ```
 HOST 1 (Client)               HOST 2 (Resolver)             HOST 3 (Auth Server)
       |                              |                              |
       |--- 1. QUERY (TxID: 404) ---->|                              |
-      |    (Client timer: 1.5s)      |--- 2. QUERY (Attempt 1) ---->| (X Server Offline)
-      |                              |    [Wait 0.5s timeout]       |
-      |                              |--- 3. QUERY (Attempt 2) ---->| (X Dropped)
-      |                              |    [Wait 0.5s timeout]       |
-      |<-- 4. RESPONSE (TxID: 404)---|                              |
+      |    (Client timer: 1.5s)      |--- 2. QUERY (1 attempt) ---->| (X Server Offline)
+      |                              |    [Wait 1.0s timeout]       |
+      |<-- 3. RESPONSE (TxID: 404)---|                              |
       |    (Arrives at T = 1.0s)     |                              |
       |    status: SERVER_FAILURE    |                              |
       |    ip: 0.0.0.0, ttl: 0       |                              |
@@ -181,7 +179,7 @@ Host 3 applies the same rule to a malformed datagram sent directly to port 53053
 
 ### 4.6 Action on Receipt
 
-"Malformed" means `unpack()` fails: datagram too short, illegal domain length, truncated trailer, or a query type other than `TYPE_A`.
+"Malformed" means `unpack()` fails (datagram too short, illegal domain length, truncated trailer, or a query type other than `TYPE_A`), or the datagram carries trailing bytes beyond the length its own fields imply (9 + L, or 13 + L for a `RESPONSE`).
 
 | Receiver | Message received | Action |
 | :--- | :--- | :--- |
@@ -190,12 +188,13 @@ Host 3 applies the same rule to a malformed datagram sent directly to port 53053
 | Authoritative (Host 3) | Malformed datagram | Reply `ERROR`, `FORMAT_ERROR`, TxID from first 2 bytes (0 if fewer), domain `bad.request`. |
 | Authoritative (Host 3) | Well-formed `RESPONSE` or `ERROR` | Ignore and log. No reply. |
 | Resolver (Host 2) | Malformed client datagram | Reply `ERROR`, `FORMAT_ERROR`, TxID from first 2 bytes (0 if fewer), domain `bad.request`. Never forwarded upstream. |
+| Resolver (Host 2) | Well-formed `RESPONSE` or `ERROR`, or a QUERY with trailing bytes, sent by a client | Reply `ERROR`, `FORMAT_ERROR` (same TxID and `bad.request` rules). Never forwarded upstream. |
 | Resolver (Host 2) | Valid QUERY, cache hit | Reply `RESPONSE`, `SUCCESS` with the remaining TTL. No upstream traffic. |
-| Resolver (Host 2) | Valid QUERY, cache miss | Forward to Host 3 (0.5 s timeout, 2 attempts). |
+| Resolver (Host 2) | Valid QUERY, cache miss | Forward to Host 3 (one attempt, 1.0 s timeout). |
 | Resolver (Host 2) | Host 3 `RESPONSE`, `SUCCESS` | Cache under the lowercase domain, relay to the client. |
 | Resolver (Host 2) | Host 3 `RESPONSE`, `NXDOMAIN` | Relay to the client. Not cached. |
-| Resolver (Host 2) | Host 3 `ERROR` | Never cached. Relay behavior: *[to be confirmed by Member 2]* |
-| Resolver (Host 2) | No answer from Host 3 after 2 attempts | Reply `RESPONSE`, `SERVER_FAILURE` to the client at about T = 1.0 s. |
+| Resolver (Host 2) | Host 3 `ERROR` | Relay to the client unchanged. Never cached. |
+| Resolver (Host 2) | No answer from Host 3 within 1.0 s | Reply `RESPONSE`, `SERVER_FAILURE` to the client at about T = 1.0 s. |
 | Client (Host 1) | `RESPONSE` with matching TxID | Accept and report the status (`SUCCESS`, `NXDOMAIN` or `SERVER_FAILURE`). |
 | Client (Host 1) | `ERROR`, `FORMAT_ERROR`, matching TxID | Terminal: report the error, no retransmission (ADR-015). |
 | Client (Host 1) | Datagram that fails `unpack()` or has a non-matching TxID | Ignore and keep waiting until the current attempt's deadline (ADR-015). |
@@ -205,7 +204,7 @@ Host 3 applies the same rule to a malformed datagram sent directly to port 53053
 
 * A client retransmission reuses the original TxID, so every node can treat it as the same query.
 * Host 3 keeps no per-query state. Each datagram is answered independently, so a duplicate or retransmitted QUERY simply produces another identical `RESPONSE`. Duplicates are therefore harmless.
-* The resolver's upstream budget (0.5 s x 2 = 1.0 s) is deliberately shorter than the client's 1.5 s timer, so `SERVER_FAILURE` reaches the client before it retransmits (ADR-005).
+* The resolver makes one upstream attempt with a 1.0 s timeout, deliberately shorter than the client's 1.5 s timer, so `SERVER_FAILURE` reaches the client before it retransmits (ADR-005, ADR-017). A lost upstream datagram is not retried by the resolver.
 * A late `RESPONSE` for a query the client has already finished, or for a TxID it is not waiting on, is ignored by the client.
 
 ---
@@ -230,7 +229,7 @@ stateDiagram-v2
     ForwardAuth --> RecvAuth : Auth responds within timeout
     RecvAuth --> UpdateCache : Status == SUCCESS
     UpdateCache --> RelayClient : Send RESPONSE to client
-    ForwardAuth --> AuthTimeout : Timeout (retries exhausted)
+    ForwardAuth --> AuthTimeout : Timeout (1.0 s, single attempt)
     AuthTimeout --> SendServFail : Send SERVER_FAILURE to client
     SendServFail --> ResolverListening
     RelayClient --> ResolverListening

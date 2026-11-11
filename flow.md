@@ -185,7 +185,7 @@ unit tests
 3. **Resolver Recursive Forwarding:**
    - Calls `resolver.py:forward_to_auth(query, client_sock, client_addr)`.
    - Creates/reuses UDP forwarding client socket `fwd_sock`.
-   - Sets upstream timeout: `fwd_sock.settimeout(0.5)`.
+   - Sets upstream timeout: `fwd_sock.settimeout(1.0)` (single attempt, ADR-017).
    - Sends query wire bytes directly to Authoritative Server at `192.168.1.12:53053`.
 4. **Authoritative Server Lookup:**
    - `authoritative_server.py:main()` listens in a socket loop on `0.0.0.0:53053`.
@@ -212,8 +212,7 @@ unit tests
 2. Client sends query for `portal.neduet.local` to Host 2. Client retransmission timer is active with `timeout = 1.5s`.
 3. Host 2 checks cache $\rightarrow$ Miss.
 4. Host 2 executes `forward_to_auth()`:
-   - **Attempt 1:** `fwd_sock.sendto(..., (auth_ip, 53053))`. Waits up to `0.5s`. Times out (`socket.timeout`).
-   - **Attempt 2:** Retries `fwd_sock.sendto(...)`. Waits up to `0.5s`. Times out (`socket.timeout`).
+   - **Single attempt:** `fwd_sock.sendto(..., (auth_ip, 53053))`. Waits up to `1.0s`. Times out (`socket.timeout`).
    - Total elapsed time at Resolver $= 1.0\text{s}$.
 5. Host 2 constructs error response:
    - `MYDNSMessage(tx_id=query.tx_id, msg_type=MSG_RESPONSE, status=STATUS_SERVER_FAILURE, ttl=0, domain=query.domain, ip_address="0.0.0.0")`.
@@ -254,6 +253,7 @@ unit tests
 2. **At Host 2:** `MYDNSMessage.unpack()` raises `ValueError`, `TypeError` or `struct.error`. The resolver builds `MYDNSMessage(tx_id=<first 2 bytes, or 0>, msg_type=MSG_ERROR, status=STATUS_FORMAT_ERROR, ttl=0, domain="bad.request")`, packs it (20 bytes) and sends it to `client_addr`. Nothing is forwarded to Host 3.
 3. **At Host 3:** `authoritative_server.py:main()` catches the same three exceptions and sends the same ERROR to the sender. A well-formed `MSG_RESPONSE` or `MSG_ERROR` is ignored and logged, with no reply. A catch-all handler keeps the server alive on any other unexpected error.
 4. **At Host 1:** an `MSG_ERROR` with a matching TxID is terminal (ADR-015). The client reports it and does not wait out the 1.5 s timer.
+5. **Extra resolver rules:** a well-formed `MSG_RESPONSE` or `MSG_ERROR`, or a QUERY with trailing bytes, sent by a client is answered with the same `FORMAT_ERROR` and never forwarded. An `MSG_ERROR` received from Host 3 is relayed to the client unchanged and never cached.
 
 ---
 
