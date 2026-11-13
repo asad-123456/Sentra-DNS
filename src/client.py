@@ -136,7 +136,13 @@ def query_domain(
             sock.close()
 
 
-def print_formatted_result(domain: str, response: MYDNSMessage, rtt_ms: float, resolver_addr: Tuple[str, int]) -> None:
+def print_formatted_result(
+    domain: str,
+    response: MYDNSMessage,
+    rtt_ms: float,
+    resolver_addr: Tuple[str, int],
+    cache_threshold_ms: float = 10.0
+) -> None:
     """Formats and prints the query resolution details to stdout."""
     status_str = response.get_status_name()
     print("=" * 70)
@@ -149,8 +155,17 @@ def print_formatted_result(domain: str, response: MYDNSMessage, rtt_ms: float, r
     print(f"Round-Trip Time:  {rtt_ms:.2f} ms")
 
     if response.status == STATUS_SUCCESS:
-        # Heuristic classification for educational demo: < 2.5ms typically indicates local cache hit
-        cache_hint = "CACHE HIT (Fast Path)" if rtt_ms < 2.5 else "CACHE MISS (Full Upstream Traversal)"
+        # Heuristic classification:
+        # Over physical Wi-Fi/LAN, 2-hop cache hit (Client <-> Resolver) typically resolves in 3-8 ms.
+        # 4-hop cache miss (Client <-> Resolver <-> Auth Server <-> Resolver <-> Client) takes 15-35 ms.
+        # On loopback (127.0.0.1), both are under 1 ms.
+        # Threshold default = 10.0 ms cleanly separates Wi-Fi hit (e.g. ~5.9 ms) from miss.
+        is_hit = rtt_ms < cache_threshold_ms
+        cache_hint = (
+            f"CACHE HIT (Fast Path, RTT < {cache_threshold_ms:.1f}ms)"
+            if is_hit
+            else f"CACHE MISS (Full Upstream Traversal, RTT >= {cache_threshold_ms:.1f}ms)"
+        )
         print(f"Resolved IPv4:    {response.ip_address}")
         print(f"Time-To-Live:     {response.ttl} seconds")
         print(f"Path Performance: {cache_hint}")
@@ -183,6 +198,12 @@ def main() -> int:
         description="MYDNS/1.0 Client CLI - Host 1 Query Engine & Latency Profiler"
     )
     parser.add_argument(
+        "target_domain",
+        nargs="?",
+        default=None,
+        help="Optional positional domain name (e.g. python src/client.py portal.neduet.local)"
+    )
+    parser.add_argument(
         "--resolver-ip",
         type=str,
         default="127.0.0.1",
@@ -212,19 +233,32 @@ def main() -> int:
         default=3,
         help="Maximum retry attempts before failing (default: 3)"
     )
+    parser.add_argument(
+        "--cache-threshold",
+        type=float,
+        default=10.0,
+        help="RTT threshold in ms to classify Cache Hit vs Miss in console output (default: 10.0 ms for Wi-Fi/hotspot)"
+    )
 
     args = parser.parse_args()
+    domain_to_query = args.target_domain if args.target_domain else args.domain
 
-    print(f"[CLIENT] Sending MYDNS/1.0 query for '{args.domain}' to {args.resolver_ip}:{args.resolver_port}...")
+    print(f"[CLIENT] Sending MYDNS/1.0 query for '{domain_to_query}' to {args.resolver_ip}:{args.resolver_port}...")
     try:
         response, rtt_ms = query_domain(
             resolver_ip=args.resolver_ip,
             resolver_port=args.resolver_port,
-            domain=args.domain,
+            domain=domain_to_query,
             timeout=args.timeout,
             max_retries=args.retries
         )
-        print_formatted_result(args.domain, response, rtt_ms, (args.resolver_ip, args.resolver_port))
+        print_formatted_result(
+            domain_to_query,
+            response,
+            rtt_ms,
+            (args.resolver_ip, args.resolver_port),
+            cache_threshold_ms=args.cache_threshold
+        )
         return 0
     except TimeoutError as e:
         print(f"\n[CLIENT TIMEOUT ERROR] {e}", file=sys.stderr)

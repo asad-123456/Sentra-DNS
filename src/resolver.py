@@ -107,18 +107,15 @@ def validate_client_datagram(data):
 
 
 # Single upstream attempt of 1.0 s (no retry). This is deliberately below the
-# client's 1.5 s retry timer, so SERVER_FAILURE reaches the client first.
-# Note: ADR-005 / spec 4.4 describe 2 x 0.5 s; the total (1.0 s) is the same.
+# client's 1.5 s retry timer so SERVER_FAILURE reaches the client first (ADR-017).
 UPSTREAM_TIMEOUT = 1.0
-UPSTREAM_ATTEMPTS = 2    # 2 x 0.5 s = 1.0 s, below the client's 1.5 s timer
+UPSTREAM_ATTEMPTS = 1    # Single attempt; 1.0 s total < client's 1.5 s timer
 
 
 def forward_upstream(data, host, port, timeout=UPSTREAM_TIMEOUT,
                      attempts=UPSTREAM_ATTEMPTS):
-    """Send the client's original bytes to Auth, retrying on timeout.
-    Returns Auth's reply bytes, or None if every attempt fails. One connected
-    socket is used for all attempts, so a late reply to attempt 1 is still
-    accepted during attempt 2."""
+    """Send the client's original bytes to Auth. One attempt of 1.0 s.
+    Returns Auth's reply bytes, or None if the attempt times out or fails."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.connect((host, port))
@@ -230,8 +227,19 @@ def main():
     ap = argparse.ArgumentParser(description="MYDNS/1.0 caching resolver")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=53000)
-    ap.add_argument("--upstream-host", default="127.0.0.1")
-    ap.add_argument("--upstream-port", type=int, default=53053)
+    ap.add_argument(
+        "--upstream-host", "--upstream-ip", "--auth-ip",
+        dest="upstream_host",
+        default="127.0.0.1",
+        help="IPv4 address of Authoritative Server (Host 3, default: 127.0.0.1)"
+    )
+    ap.add_argument(
+        "--upstream-port", "--auth-port",
+        dest="upstream_port",
+        type=int,
+        default=53053,
+        help="UDP port of Authoritative Server (default: 53053)"
+    )
     ap.add_argument("--timeout", type=float, default=UPSTREAM_TIMEOUT)
     a = ap.parse_args()
     try:

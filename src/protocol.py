@@ -2,8 +2,8 @@
 MYDNS/1.0 Protocol Implementation Module
 Course: CS-327 Computer Communication Networks (Fall 2026)
 Track: Option B — Mini DNS Service (MYDNS/1.0)
-Lead Protocol Engineer: Abdur Rehman (CS-24098)
-Collaborators: Atta-Ur-Rehman (CS-24092), Asadullah Zafar (CS-24082)
+Lead Protocol Engineer: Asadullah Zafar (CS-24082)
+Collaborators: Atta-Ur-Rehman (CS-24092), Abdur Rehman (CS-24098)
 Institution: Department of Computer & Information Systems Engineering,
              NED University of Engineering & Technology
 
